@@ -1,105 +1,123 @@
 'use client'
 
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useEffect, useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
 
 function CallbackContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
-  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState('')
 
   useEffect(() => {
-    const code = searchParams.get('code')
-    const errorParam = searchParams.get('error')
+    const handleCallback = async () => {
+      const code = searchParams.get('code')
+      const error = searchParams.get('error')
+      const state = searchParams.get('state')
 
-    if (errorParam) {
-      setStatus('error')
-      setError('User denied authorization or an error occurred')
-      return
-    }
+      // Check if there was an error from Spotify
+      if (error) {
+        setStatus('error')
+        setMessage(`Authorization failed: ${error}`)
+        setTimeout(() => {
+          router.push('/auth/login')
+        }, 3000)
+        return
+      }
 
-    if (!code) {
-      setStatus('error')
-      setError('No authorization code received')
-      return
-    }
+      // Check if we have an authorization code
+      if (!code) {
+        setStatus('error')
+        setMessage('No authorization code received')
+        setTimeout(() => {
+          router.push('/auth/login')
+        }, 3000)
+        return
+      }
 
-    // Exchange code for tokens
-    fetch('/api/auth/callback', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code }),
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
+      // Verify state parameter for security
+      const storedState = sessionStorage.getItem('spotify_auth_state')
+      if (state !== storedState) {
+        setStatus('error')
+        setMessage('Invalid state parameter')
+        setTimeout(() => {
+          router.push('/auth/login')
+        }, 3000)
+        return
+      }
+
+      try {
+        // Exchange the authorization code for tokens
+        const response = await fetch('/api/auth/callback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ code, state }),
+        })
+
+        const result = await response.json()
+
+        if (result.success) {
           setStatus('success')
+          setMessage('Successfully authenticated! Redirecting...')
+          
+          // Clean up stored state
+          sessionStorage.removeItem('spotify_auth_state')
+          
+          // Redirect to home page
           setTimeout(() => {
             router.push('/')
           }, 2000)
         } else {
-          setStatus('error')
-          setError(data.error || 'Authentication failed')
+          throw new Error(result.error || 'Authentication failed')
         }
-      })
-      .catch(err => {
+      } catch (error) {
+        console.error('Callback error:', error)
         setStatus('error')
-        setError('Network error occurred')
-        console.error('Callback error:', err)
-      })
+        setMessage(error instanceof Error ? error.message : 'Authentication failed')
+        setTimeout(() => {
+          router.push('/auth/login')
+        }, 3000)
+      }
+    }
+
+    handleCallback()
   }, [searchParams, router])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-spotify-black via-gray-900 to-spotify-darkgray">
-      <div className="glass-effect rounded-2xl p-8 max-w-md mx-4 text-center">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-spotify-black to-gray-900 p-4">
+      <div className="glass-effect rounded-2xl p-8 max-w-md w-full text-center">
         {status === 'loading' && (
           <>
-            <div className="w-16 h-16 border-4 border-spotify-green border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-            <h1 className="text-xl font-semibold text-white mb-2">
-              Connecting to Spotify...
-            </h1>
-            <p className="text-spotify-lightgray">
-              Please wait while we set up your account
-            </p>
+            <div className="w-16 h-16 mx-auto mb-4 border-4 border-spotify-green/30 border-t-spotify-green rounded-full animate-spin"></div>
+            <h1 className="text-xl font-bold text-white mb-2">Connecting...</h1>
+            <p className="text-spotify-lightgray">Setting up your Spotify connection</p>
           </>
         )}
 
         {status === 'success' && (
           <>
-            <div className="w-16 h-16 bg-spotify-green rounded-full flex items-center justify-center mx-auto mb-6">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-16 h-16 mx-auto mb-4 bg-spotify-green rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-xl font-semibold text-white mb-2">
-              Successfully Connected!
-            </h1>
-            <p className="text-spotify-lightgray">
-              Redirecting you to your Now Playing dashboard...
-            </p>
+            <h1 className="text-xl font-bold text-white mb-2">Success!</h1>
+            <p className="text-spotify-lightgray">{message}</p>
           </>
         )}
 
         {status === 'error' && (
           <>
-            <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 mx-auto mb-4 bg-red-500 rounded-full flex items-center justify-center">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h1 className="text-xl font-semibold text-white mb-2">
-              Connection Failed
-            </h1>
-            <p className="text-red-300 mb-4">{error}</p>
-            <button
-              onClick={() => router.push('/auth/login')}
-              className="bg-spotify-green hover:bg-spotify-green/90 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
-            >
-              Try Again
-            </button>
+            <h1 className="text-xl font-bold text-white mb-2">Error</h1>
+            <p className="text-red-400 mb-4">{message}</p>
+            <p className="text-spotify-gray text-sm">Redirecting to login...</p>
           </>
         )}
       </div>
@@ -107,25 +125,13 @@ function CallbackContent() {
   )
 }
 
-function LoadingFallback() {
+export default function CallbackPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-spotify-black via-gray-900 to-spotify-darkgray">
-      <div className="glass-effect rounded-2xl p-8 max-w-md mx-4 text-center">
-        <div className="w-16 h-16 border-4 border-spotify-green border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-        <h1 className="text-xl font-semibold text-white mb-2">
-          Loading...
-        </h1>
-        <p className="text-spotify-lightgray">
-          Setting up your authentication
-        </p>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-spotify-green"></div>
       </div>
-    </div>
-  )
-}
-
-export default function SpotifyCallback() {
-  return (
-    <Suspense fallback={<LoadingFallback />}>
+    }>
       <CallbackContent />
     </Suspense>
   )

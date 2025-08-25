@@ -5,7 +5,7 @@ const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token'
 
 export async function POST(request: NextRequest) {
   try {
-    const { code } = await request.json()
+    const { code, state } = await request.json()
 
     if (!code) {
       return NextResponse.json(
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
-      const error = await response.text()
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }))
       console.error('Spotify token exchange failed:', error)
       return NextResponse.json(
         { success: false, error: 'Failed to exchange authorization code' },
@@ -50,6 +50,13 @@ export async function POST(request: NextRequest) {
 
     const tokens = await response.json()
 
+    if (!tokens.refresh_token) {
+      return NextResponse.json(
+        { success: false, error: 'No refresh token received from Spotify' },
+        { status: 400 }
+      )
+    }
+
     // Store the refresh token in an HTTP-only cookie
     const cookieStore = await cookies()
     cookieStore.set('spotify_refresh_token', tokens.refresh_token, {
@@ -57,6 +64,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: '/',
     })
 
     // Also store access token temporarily
@@ -65,6 +73,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: tokens.expires_in || 3600, // Usually 1 hour
+      path: '/',
     })
 
     return NextResponse.json({ 
@@ -78,5 +87,77 @@ export async function POST(request: NextRequest) {
       { success: false, error: 'Internal server error' },
       { status: 500 }
     )
+  }
+}
+
+// Handle GET requests for OAuth callback (when user is redirected from Spotify)
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const code = searchParams.get('code')
+  const error = searchParams.get('error')
+  const state = searchParams.get('state')
+
+  if (error) {
+    console.error('Spotify OAuth error:', error)
+    return NextResponse.redirect(new URL(`/auth/login?error=${encodeURIComponent(error)}`, request.url))
+  }
+
+  if (!code) {
+    return NextResponse.redirect(new URL('/auth/login?error=no_code', request.url))
+  }
+
+  try {
+    // Use the same token exchange logic as POST
+    const clientId = process.env.SPOTIFY_CLIENT_ID
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
+    const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/callback`
+
+    if (!clientId || !clientSecret) {
+      return NextResponse.redirect(new URL('/auth/login?error=server_config', request.url))
+    }
+
+    const response = await fetch(SPOTIFY_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Token exchange failed')
+    }
+
+    const tokens = await response.json()
+
+    // Store tokens in cookies
+    const cookieStore = await cookies()
+    cookieStore.set('spotify_refresh_token', tokens.refresh_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: '/',
+    })
+
+    cookieStore.set('spotify_access_token', tokens.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: tokens.expires_in || 3600,
+      path: '/',
+    })
+
+    // Redirect to home page
+    return NextResponse.redirect(new URL('/', request.url))
+
+  } catch (error) {
+    console.error('OAuth callback error:', error)
+    return NextResponse.redirect(new URL('/auth/login?error=callback_failed', request.url))
   }
 }

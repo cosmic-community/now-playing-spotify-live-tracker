@@ -41,10 +41,13 @@ async function getAccessToken(): Promise<string> {
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
     }),
+    cache: 'no-store',
   })
 
   if (!response.ok) {
-    throw new Error('Failed to refresh Spotify token')
+    const errorData = await response.json().catch(() => ({}))
+    console.error('Token refresh failed:', errorData)
+    throw new Error(`Failed to refresh Spotify token: ${response.status}`)
   }
 
   const data = await response.json()
@@ -80,9 +83,9 @@ export async function getCurrentlyPlaying(): Promise<CurrentlyPlayingResponse | 
     const response = await fetch(SPOTIFY_NOW_PLAYING_URL, {
       headers: {
         'Authorization': `Bearer ${access_token}`,
+        'Content-Type': 'application/json',
       },
-      // Cache for 30 seconds to avoid rate limiting
-      next: { revalidate: 30 },
+      cache: 'no-store',
     })
 
     // 204 means no track is currently playing
@@ -90,7 +93,17 @@ export async function getCurrentlyPlaying(): Promise<CurrentlyPlayingResponse | 
       return null
     }
 
+    // 401 means token is expired or invalid
+    if (response.status === 401) {
+      // Clear invalid tokens
+      const cookieStore = await cookies()
+      cookieStore.delete('spotify_access_token')
+      throw new Error('Spotify authentication expired')
+    }
+
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+      console.error('Spotify API error:', errorData)
       const error: SpotifyError = new Error(`Spotify API error: ${response.status}`)
       error.status = response.status
       throw error
@@ -106,6 +119,12 @@ export async function getCurrentlyPlaying(): Promise<CurrentlyPlayingResponse | 
     }
   } catch (error) {
     console.error('Error fetching currently playing:', error)
+    
+    // Re-throw authentication errors so they can be handled properly
+    if (error instanceof Error && error.message.includes('authentication')) {
+      throw error
+    }
+    
     return null
   }
 }
