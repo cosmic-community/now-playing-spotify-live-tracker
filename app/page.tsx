@@ -1,12 +1,20 @@
+import { redirect } from 'next/navigation'
 import NowPlaying from '@/components/NowPlaying'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
-import { getCurrentlyPlaying } from '@/lib/spotify'
+import { getCurrentlyPlaying, isAuthenticated } from '@/lib/spotify'
 import { getSiteConfig, getAppSettings } from '@/lib/cosmic'
 
 export const revalidate = 30 // Revalidate every 30 seconds
 
 export default async function HomePage() {
+  // Check if user is authenticated
+  const authenticated = await isAuthenticated()
+  
+  if (!authenticated) {
+    redirect('/auth/login')
+  }
+
   // Fetch data in parallel
   const [currentlyPlaying, siteConfig, appSettings] = await Promise.all([
     getCurrentlyPlaying(),
