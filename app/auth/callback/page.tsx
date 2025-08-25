@@ -130,13 +130,3 @@ export default function SpotifyCallback() {
     </Suspense>
   )
 }
-
-export const metadata = {
-  title: 'Spotify Authentication - Now Playing Tracker',
-  description: 'Completing Spotify authentication for your Now Playing tracker',
-}
-
-export const viewport = {
-  viewport: 'width=device-width, initial-scale=1',
-  themeColor: '#1DB954',
-}
