@@ -36,33 +36,66 @@ function LoginContent() {
     setIsLoading(true)
     setError('')
 
-    const clientId = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID
-    const redirectUri = `${window.location.origin}/auth/callback`
-    
-    // Required scopes for reading user's currently playing track
-    const scopes = [
-      'user-read-currently-playing',
-      'user-read-playback-state',
-      'user-read-recently-played'
-    ].join(' ')
+    // PKCE helper functions
+    function generateCodeVerifier(length: number): string {
+      let text = ''
+      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+      
+      for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length))
+      }
+      return text
+    }
 
-    // Generate a random state for security
-    const state = Math.random().toString(36).substring(7)
-    
-    // Store state in sessionStorage to verify later
-    sessionStorage.setItem('spotify_auth_state', state)
+    async function generateCodeChallenge(codeVerifier: string): Promise<string> {
+      const data = new TextEncoder().encode(codeVerifier)
+      const digest = await window.crypto.subtle.digest('SHA-256', data)
+      return btoa(String.fromCharCode.apply(null, [...new Uint8Array(digest)]))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+    }
 
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: clientId as string,
-      scope: scopes,
-      redirect_uri: redirectUri,
-      state: state,
-      show_dialog: 'true', // Force the user to approve the app again
+    // Generate PKCE parameters
+    const verifier = generateCodeVerifier(128)
+    generateCodeChallenge(verifier).then(challenge => {
+      // Store verifier for later use
+      localStorage.setItem('verifier', verifier)
+
+      const clientId = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID
+      const redirectUri = `${window.location.origin}/auth/callback`
+      
+      // Required scopes for reading user's currently playing track
+      const scopes = [
+        'user-read-currently-playing',
+        'user-read-playback-state',
+        'user-read-recently-played'
+      ].join(' ')
+
+      // Generate a random state for security
+      const state = Math.random().toString(36).substring(7)
+      
+      // Store state in sessionStorage to verify later
+      sessionStorage.setItem('spotify_auth_state', state)
+
+      const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: clientId as string,
+        scope: scopes,
+        redirect_uri: redirectUri,
+        state: state,
+        code_challenge_method: 'S256',
+        code_challenge: challenge,
+        show_dialog: 'true', // Force the user to approve the app again
+      })
+
+      // Redirect to Spotify authorization
+      window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`
+    }).catch(error => {
+      console.error('Error generating code challenge:', error)
+      setError('Failed to initialize authentication')
+      setIsLoading(false)
     })
-
-    // Redirect to Spotify authorization
-    window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`
   }
 
   return (

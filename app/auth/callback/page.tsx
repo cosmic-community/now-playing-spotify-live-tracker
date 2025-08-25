@@ -46,12 +46,24 @@ function CallbackContent() {
         return
       }
 
+      // Get the stored verifier
+      const verifier = localStorage.getItem('verifier')
+      if (!verifier) {
+        setStatus('error')
+        setMessage('Missing verification code')
+        setTimeout(() => {
+          router.push('/auth/login')
+        }, 3000)
+        return
+      }
+
       try {
         // Exchange the authorization code for tokens
         const response = await fetch('/api/auth/callback', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-code-verifier': verifier,
           },
           body: JSON.stringify({ code, state }),
         })
@@ -62,8 +74,9 @@ function CallbackContent() {
           setStatus('success')
           setMessage('Successfully authenticated! Redirecting...')
           
-          // Clean up stored state
+          // Clean up stored data
           sessionStorage.removeItem('spotify_auth_state')
+          localStorage.removeItem('verifier')
           
           // Redirect to home page
           setTimeout(() => {

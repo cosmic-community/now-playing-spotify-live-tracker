@@ -16,12 +16,22 @@ export async function POST(request: NextRequest) {
 
     const clientId = process.env.SPOTIFY_CLIENT_ID
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
-    const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/callback`
+    const redirectUri = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/callback`
 
     if (!clientId || !clientSecret) {
       return NextResponse.json(
         { success: false, error: 'Spotify credentials not configured' },
         { status: 500 }
+      )
+    }
+
+    // Get the verifier from the request (it should be sent from the client)
+    const verifier = request.headers.get('x-code-verifier')
+
+    if (!verifier) {
+      return NextResponse.json(
+        { success: false, error: 'Code verifier is required' },
+        { status: 400 }
       )
     }
 
@@ -36,6 +46,7 @@ export async function POST(request: NextRequest) {
         grant_type: 'authorization_code',
         code,
         redirect_uri: redirectUri,
+        code_verifier: verifier,
       }),
     })
 
@@ -106,58 +117,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/login?error=no_code', request.url))
   }
 
-  try {
-    // Use the same token exchange logic as POST
-    const clientId = process.env.SPOTIFY_CLIENT_ID
-    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
-    const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/callback`
+  // For the GET callback, we'll redirect to a client-side page that handles the token exchange
+  // This is because we need the code_verifier that was stored in localStorage
+  const callbackUrl = new URL('/auth/callback', request.url)
+  callbackUrl.searchParams.set('code', code)
+  if (state) callbackUrl.searchParams.set('state', state)
 
-    if (!clientId || !clientSecret) {
-      return NextResponse.redirect(new URL('/auth/login?error=server_config', request.url))
-    }
-
-    const response = await fetch(SPOTIFY_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-      },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error('Token exchange failed')
-    }
-
-    const tokens = await response.json()
-
-    // Store tokens in cookies
-    const cookieStore = await cookies()
-    cookieStore.set('spotify_refresh_token', tokens.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-      path: '/',
-    })
-
-    cookieStore.set('spotify_access_token', tokens.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: tokens.expires_in || 3600,
-      path: '/',
-    })
-
-    // Redirect to home page
-    return NextResponse.redirect(new URL('/', request.url))
-
-  } catch (error) {
-    console.error('OAuth callback error:', error)
-    return NextResponse.redirect(new URL('/auth/login?error=callback_failed', request.url))
-  }
+  return NextResponse.redirect(callbackUrl)
 }
