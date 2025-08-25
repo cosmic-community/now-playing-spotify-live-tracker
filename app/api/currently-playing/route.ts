@@ -22,8 +22,30 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Error fetching currently playing:', error)
+    
+    // Return a more informative error response
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { 
+          error: 'Failed to fetch currently playing track',
+          message: error.message,
+          track: null,
+          isPlaying: false,
+          progress: 0,
+          device: null
+        },
+        { status: 500 }
+      )
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to fetch currently playing track' },
+      { 
+        error: 'Failed to fetch currently playing track',
+        track: null,
+        isPlaying: false,
+        progress: 0,
+        device: null
+      },
       { status: 500 }
     )
   }

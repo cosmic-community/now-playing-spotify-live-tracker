@@ -17,11 +17,14 @@ export default function OfflineState({ settings }: OfflineStateProps) {
         <div className="space-y-2">
           <h2 className="text-2xl font-bold text-white">Nothing Playing</h2>
           <p className="text-spotify-lightgray">{offlineMessage}</p>
+          <p className="text-sm text-spotify-gray">
+            Start playing music on Spotify to see it here in real-time
+          </p>
         </div>
         
         <div className="flex items-center justify-center gap-2">
           <div className="w-3 h-3 rounded-full bg-gray-500" />
-          <span className="text-sm text-spotify-gray">Offline</span>
+          <span className="text-sm text-spotify-gray">Waiting for music...</span>
         </div>
         
         <div className="pt-4">
