@@ -1,10 +1,11 @@
-import type { SiteConfig } from '@/types'
+import type { SiteConfig, AppSettings } from '@/types'
 
 interface FooterProps {
   config: SiteConfig | null
+  settings: AppSettings | null
 }
 
-export default function Footer({ config }: FooterProps) {
+export default function Footer({ config, settings }: FooterProps) {
   return (
     <footer className="w-full p-6 text-center">
       <div className="max-w-4xl mx-auto space-y-4">
@@ -43,7 +44,7 @@ export default function Footer({ config }: FooterProps) {
         
         <div className="text-xs text-spotify-gray">
           <p>
-            Real-time music tracking • Updates every {config?.metadata?.update_interval ? Math.floor((config.metadata.update_interval as number) / 1000) : 30} seconds
+            Real-time music tracking • Updates every {settings?.metadata?.update_interval ? Math.floor((settings.metadata.update_interval as number) / 1000) : 30} seconds
           </p>
           <p className="mt-1">
             Data provided by Spotify Web API • {new Date().getFullYear()}

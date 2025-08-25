@@ -43,7 +43,7 @@ export default async function HomePage() {
         </div>
       </div>
       
-      <Footer config={siteConfig} />
+      <Footer config={siteConfig} settings={appSettings} />
     </div>
   )
 }
