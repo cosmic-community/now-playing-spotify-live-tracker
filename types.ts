@@ -116,8 +116,8 @@ interface CosmicResponse<T> {
   skip: number;
 }
 
-// Utility types
-type OptionalMetadata<T> = Partial<T['metadata']>;
+// Utility types - Fixed the generic constraint
+type OptionalMetadata<T extends { metadata: any }> = Partial<T['metadata']>;
 
 // Error types
 interface SpotifyError extends Error {
