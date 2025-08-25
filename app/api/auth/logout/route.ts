@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
-import { logout } from '@/lib/spotify-server'
+import { cookies } from 'next/headers'
 
 export async function POST() {
   try {
-    await logout()
+    const cookieStore = await cookies()
+    
+    // Clear the stored Spotify tokens
+    cookieStore.delete('spotify_refresh_token')
+    cookieStore.delete('spotify_access_token')
     
     return NextResponse.json({ 
       success: true,
