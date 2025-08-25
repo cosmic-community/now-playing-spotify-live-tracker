@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function SpotifyCallback() {
+function CallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
@@ -105,4 +105,38 @@ export default function SpotifyCallback() {
       </div>
     </div>
   )
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-spotify-black via-gray-900 to-spotify-darkgray">
+      <div className="glass-effect rounded-2xl p-8 max-w-md mx-4 text-center">
+        <div className="w-16 h-16 border-4 border-spotify-green border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+        <h1 className="text-xl font-semibold text-white mb-2">
+          Loading...
+        </h1>
+        <p className="text-spotify-lightgray">
+          Setting up your authentication
+        </p>
+      </div>
+    </div>
+  )
+}
+
+export default function SpotifyCallback() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <CallbackContent />
+    </Suspense>
+  )
+}
+
+export const metadata = {
+  title: 'Spotify Authentication - Now Playing Tracker',
+  description: 'Completing Spotify authentication for your Now Playing tracker',
+}
+
+export const viewport = {
+  viewport: 'width=device-width, initial-scale=1',
+  themeColor: '#1DB954',
 }
