@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function SpotifyLogin() {
+function SpotifyLoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
@@ -69,5 +69,23 @@ export default function SpotifyLogin() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function SpotifyLogin() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-spotify-black via-gray-900 to-spotify-darkgray">
+        <div className="glass-effect rounded-2xl p-8 max-w-md mx-4 text-center">
+          <div className="animate-pulse">
+            <div className="w-16 h-16 bg-spotify-green rounded-full mx-auto mb-4"></div>
+            <div className="h-6 bg-gray-700 rounded mb-2"></div>
+            <div className="h-4 bg-gray-700 rounded"></div>
+          </div>
+        </div>
+      </div>
+    }>
+      <SpotifyLoginContent />
+    </Suspense>
   )
 }

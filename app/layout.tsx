@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { getSiteConfig } from '@/lib/cosmic'
 import CosmicBadge from '@/components/CosmicBadge'
@@ -11,8 +11,6 @@ export async function generateMetadata(): Promise<Metadata> {
     description: config?.metadata?.description || 'See what music I\'m currently listening to on Spotify in real-time',
     keywords: 'spotify, now playing, music, live, tracker, currently playing',
     authors: [{ name: 'Spotify Music Tracker' }],
-    viewport: 'width=device-width, initial-scale=1',
-    themeColor: '#1DB954',
     openGraph: {
       title: config?.title || 'Now Playing - Spotify Live Tracker',
       description: config?.metadata?.description || 'See what music I\'m currently listening to on Spotify in real-time',
@@ -26,6 +24,12 @@ export async function generateMetadata(): Promise<Metadata> {
       images: config?.metadata?.logo ? [config.metadata.logo.imgix_url] : [],
     },
   }
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#1DB954',
 }
 
 export default function RootLayout({
