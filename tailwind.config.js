@@ -8,6 +8,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        border: '#e5e7eb', // Add default border color
         spotify: {
           green: '#1db954',
           black: '#191414',
