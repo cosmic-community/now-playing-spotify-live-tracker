@@ -1,10 +1,10 @@
 const fs = require('fs');
 const path = require('path');
-const glob = require('glob');
+const { glob } = require('glob');
 
 const SCRIPT_TAG = '<script src="/dashboard-console-capture.js"></script>';
 
-function injectConsoleCapture() {
+async function injectConsoleCapture() {
   const buildDir = path.join(process.cwd(), '.next');
   const distDir = path.join(process.cwd(), 'dist');
   const outDir = path.join(process.cwd(), 'out');
@@ -27,12 +27,9 @@ function injectConsoleCapture() {
     return;
   }
   
-  // Find all HTML files in build output
-  glob(`${targetDir}/**/*.html`, (err, files) => {
-    if (err) {
-      console.error('❌ Error finding HTML files:', err);
-      return;
-    }
+  try {
+    // Find all HTML files in build output using the new glob syntax
+    const files = await glob(`${targetDir}/**/*.html`);
     
     if (files.length === 0) {
       console.log('⚠️  No HTML files found in build output.');
@@ -74,8 +71,10 @@ function injectConsoleCapture() {
     });
     
     console.log(`\n📊 Console capture injection complete! (${injectedCount}/${files.length} files updated)`);
-  });
+  } catch (error) {
+    console.error('❌ Error finding HTML files:', error);
+  }
 }
 
 // Run the injection
-injectConsoleCapture();
+injectConsoleCapture().catch(console.error);
