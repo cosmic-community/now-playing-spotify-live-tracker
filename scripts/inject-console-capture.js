@@ -1,80 +1,146 @@
 const fs = require('fs');
 const path = require('path');
-const { glob } = require('glob');
+const glob = require('glob');
 
-const SCRIPT_TAG = '<script src="/dashboard-console-capture.js"></script>';
+const consoleScript = `
+<script>
+(function () {
+  if (window.self === window.top) return;
 
-async function injectConsoleCapture() {
-  const buildDir = path.join(process.cwd(), '.next');
-  const distDir = path.join(process.cwd(), 'dist');
-  const outDir = path.join(process.cwd(), 'out');
-  
-  // Check which build directory exists
-  let targetDir = null;
-  if (fs.existsSync(buildDir)) {
-    targetDir = buildDir;
-    console.log('📁 Found Next.js build directory');
-  } else if (fs.existsSync(distDir)) {
-    targetDir = distDir;
-    console.log('📁 Found dist directory');
-  } else if (fs.existsSync(outDir)) {
-    targetDir = outDir;
-    console.log('📁 Found out directory');
+  const logs = [];
+  const MAX_LOGS = 500;
+
+  const originalConsole = {
+    log: console.log,
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+    debug: console.debug
+  };
+
+  function captureLog(level, args) {
+    const timestamp = new Date().toISOString();
+    const message = args.map(arg => {
+      if (typeof arg === 'object' && arg !== null) {
+        try {
+          return JSON.stringify(arg, (key, value) => {
+            if (typeof value === 'function') return '[Function]';
+            if (value instanceof Error) return value.toString();
+            return value;
+          }, 2);
+        } catch (e) {
+          return '[Object]';
+        }
+      }
+      return String(arg);
+    }).join(' ');
+
+    const logEntry = {
+      timestamp,
+      level,
+      message,
+      url: window.location.href
+    };
+
+    logs.push(logEntry);
+    if (logs.length > MAX_LOGS) {
+      logs.shift();
+    }
+
+    try {
+      window.parent.postMessage({
+        type: 'console-log',
+        log: logEntry
+      }, '*');
+    } catch (e) { }
   }
-  
-  if (!targetDir) {
-    console.log('⚠️  No build directory found. Skipping console capture injection.');
-    return;
+
+  console.log = function(...args) { captureLog('log', args); originalConsole.log.apply(console, args); };
+  console.warn = function(...args) { captureLog('warn', args); originalConsole.warn.apply(console, args); };
+  console.error = function(...args) { captureLog('error', args); originalConsole.error.apply(console, args); };
+  console.info = function(...args) { captureLog('info', args); originalConsole.info.apply(console, args); };
+  console.debug = function(...args) { captureLog('debug', args); originalConsole.debug.apply(console, args); };
+
+  window.addEventListener('error', function(event) {
+    captureLog('error', [\`Unhandled Error: \${event.message}\`, \`at \${event.filename}:\${event.lineno}:\${event.colno}\`]);
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    captureLog('error', [\`Unhandled Promise Rejection: \${event.reason}\`]);
+  });
+
+  function sendReady() {
+    try {
+      window.parent.postMessage({
+        type: 'console-capture-ready',
+        url: window.location.href,
+        timestamp: new Date().toISOString()
+      }, '*');
+    } catch (e) { }
   }
-  
+
+  function sendRouteChange() {
+    try {
+      window.parent.postMessage({
+        type: 'route-change',
+        route: {
+          pathname: window.location.pathname,
+          search: window.location.search,
+          hash: window.location.hash,
+          href: window.location.href
+        },
+        timestamp: new Date().toISOString()
+      }, '*');
+    } catch (e) { }
+  }
+
+  if (document.readyState === 'complete') {
+    setTimeout(() => { sendReady(); sendRouteChange(); }, 200);
+  } else {
+    window.addEventListener('load', () => {
+      setTimeout(() => { sendReady(); sendRouteChange(); }, 200);
+    });
+  }
+
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+  history.pushState = function(...args) { originalPushState.apply(history, args); setTimeout(sendRouteChange, 0); };
+  history.replaceState = function(...args) { originalReplaceState.apply(history, args); setTimeout(sendRouteChange, 0); };
+  window.addEventListener('popstate', sendRouteChange);
+  window.addEventListener('hashchange', sendRouteChange);
+})();
+</script>`;
+
+function injectConsoleScript() {
   try {
-    // Find all HTML files in build output using the new glob syntax
-    const files = await glob(`${targetDir}/**/*.html`);
+    const outDir = path.join(process.cwd(), '.next');
     
-    if (files.length === 0) {
-      console.log('⚠️  No HTML files found in build output.');
+    if (!fs.existsSync(outDir)) {
+      console.log('No .next directory found. Skipping console capture injection.');
       return;
     }
+
+    // Find all HTML files in .next directory
+    const htmlFiles = glob.sync('**/*.html', { cwd: outDir });
     
     let injectedCount = 0;
     
-    files.forEach(file => {
-      try {
-        let content = fs.readFileSync(file, 'utf8');
-        
-        // Skip if script is already injected
-        if (content.includes('dashboard-console-capture.js')) {
-          return;
-        }
-        
-        // Try to inject before closing head tag first
-        if (content.includes('</head>')) {
-          content = content.replace('</head>', `  ${SCRIPT_TAG}\n</head>`);
-          injectedCount++;
-        }
-        // Fallback to inject after opening body tag
-        else if (content.includes('<body>')) {
-          content = content.replace('<body>', `<body>\n  ${SCRIPT_TAG}`);
-          injectedCount++;
-        }
-        // Last resort: inject at the end of HTML
-        else if (content.includes('</html>')) {
-          content = content.replace('</html>', `${SCRIPT_TAG}\n</html>`);
-          injectedCount++;
-        }
-        
-        fs.writeFileSync(file, content);
-        console.log(`✓ Injected console capture into: ${path.relative(process.cwd(), file)}`);
-      } catch (error) {
-        console.error(`✗ Error processing ${file}:`, error.message);
+    htmlFiles.forEach(file => {
+      const filePath = path.join(outDir, file);
+      let content = fs.readFileSync(filePath, 'utf8');
+      
+      // Only inject if not already present and there's a head tag
+      if (!content.includes('console-capture-ready') && content.includes('<head>')) {
+        content = content.replace('</head>', `${consoleScript}</head>`);
+        fs.writeFileSync(filePath, content);
+        injectedCount++;
       }
     });
     
-    console.log(`\n📊 Console capture injection complete! (${injectedCount}/${files.length} files updated)`);
+    console.log(`Console capture script injected into ${injectedCount} HTML files.`);
   } catch (error) {
-    console.error('❌ Error finding HTML files:', error);
+    console.error('Error injecting console capture script:', error);
   }
 }
 
-// Run the injection
-injectConsoleCapture().catch(console.error);
+injectConsoleScript();

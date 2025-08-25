@@ -1,19 +1,18 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import { logout } from '@/lib/spotify-server'
 
 export async function POST() {
   try {
-    const cookieStore = await cookies()
+    await logout()
     
-    // Clear auth cookies
-    cookieStore.delete('spotify_refresh_token')
-    cookieStore.delete('spotify_access_token')
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ 
+      success: true,
+      message: 'Successfully logged out'
+    })
   } catch (error) {
     console.error('Logout error:', error)
     return NextResponse.json(
-      { success: false, error: 'Logout failed' },
+      { success: false, error: 'Failed to logout' },
       { status: 500 }
     )
   }
