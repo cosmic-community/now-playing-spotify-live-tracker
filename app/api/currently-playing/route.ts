@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCurrentlyPlaying } from '@/lib/spotify'
+import { getCurrentlyPlaying } from '@/lib/spotify-server'
 
 export async function GET() {
   try {

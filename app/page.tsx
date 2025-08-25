@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import NowPlaying from '@/components/NowPlaying'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
-import { getCurrentlyPlaying, isAuthenticated } from '@/lib/spotify'
+import { getCurrentlyPlaying, isAuthenticated } from '@/lib/spotify-server'
 import { getSiteConfig, getAppSettings } from '@/lib/cosmic'
 
 export const revalidate = 30 // Revalidate every 30 seconds
