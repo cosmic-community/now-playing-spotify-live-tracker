@@ -5,13 +5,13 @@ export async function POST() {
   try {
     const cookieStore = await cookies()
     
-    // Remove all Spotify-related cookies
-    cookieStore.delete('spotify_access_token')
+    // Clear all Spotify-related cookies
     cookieStore.delete('spotify_refresh_token')
+    cookieStore.delete('spotify_access_token')
     
     return NextResponse.json({ 
-      success: true, 
-      message: 'Successfully logged out' 
+      success: true,
+      message: 'Successfully logged out'
     })
   } catch (error) {
     console.error('Logout error:', error)
